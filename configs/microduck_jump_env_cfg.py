@@ -353,9 +353,9 @@ def make_microduck_jump_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
             del cfg.rewards[name]
 
     cfg.rewards["upright"].params["asset_cfg"].body_names = ("trunk_base",)
-    cfg.rewards["upright"].weight = 2.0
+    cfg.rewards["upright"].weight = 3.0  # v8.6
     cfg.rewards["body_ang_vel"].params["asset_cfg"].body_names = ("trunk_base",)
-    cfg.rewards["body_ang_vel"].weight = -0.05
+    cfg.rewards["body_ang_vel"].weight = -0.15  # v8.6
     cfg.rewards["action_rate_l2"].weight = -0.4  # v7: plafond 0.4 (voir curriculum)
 
     # Objectif principal : hauteur du tronc le long du trapèze de bond.
@@ -412,13 +412,15 @@ def make_microduck_jump_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         params={"sensor_name": "self_collision"},
     )
     cfg.rewards["neck_action_rate_l2"] = RewardTermCfg(
-        func=microduck_mdp.neck_action_rate_l2, weight=-0.5
+        func=microduck_mdp.neck_action_rate_l2, weight=-1.5  # v8: 0.5->1.5 抑制急甩头
     )
     cfg.rewards["neck_joint_pos_l2"] = RewardTermCfg(
         func=microduck_mdp.neck_joint_pos_l2,
-        weight=-0.2,
-        params={"pattern": NECK_PATTERN_NO_YAW},
+        weight=-1.2,  # v8: 0.2->1.2 姿态拉正
+        params={"pattern": r"^(neck_pitch|head_pitch|head_roll|head_yaw)$"},
     )
+    # v8.5: 内八/外八 + 踝开合。hiiggt yaw ~60deg / ankle ~80deg 摆幅 (v7f/v8 同), 
+    # 用户观感"疯疯癫癫"。复用 neck_joint_pos_l2 (find_joints pattern 通用)。
     cfg.rewards["joint_torques_l2"] = RewardTermCfg(
         func=microduck_mdp.joint_torques_l2, weight=-1e-3
     )

@@ -2,7 +2,7 @@
 """microduck-jump: 把训练好的策略 checkpoint 导出为 ONNX 并自检。
 
 用法 (Thor / 有 mjlab 环境的机器):
-    MUJOCO_GL=egl uv run --no-sync python export_policy_to_onnx.py <model_XXX.pt> [--out policy.onnx]
+    MUJOCO_GL=egl uv run --no-sync python export_policy_to_onnx.py <model_XXX.pt> [--out niu-lai.onnx]
 
 流程:
   1. 按任务注册表加载 Mjlab-Jump-Flat-MicroDuck 环境 (取观测/动作维度, 无需跑环境)。
@@ -31,7 +31,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("ckpt", type=str, help="训练产物, 如 model_599.pt")
     ap.add_argument("--task", default="Mjlab-Jump-Flat-MicroDuck")
-    ap.add_argument("--out", default="policy.onnx")
+    ap.add_argument("--out", default="niu-lai.onnx")
     ap.add_argument("--envs", type=int, default=16)
     ap.add_argument("--dev", default="cpu")
     args = ap.parse_args()

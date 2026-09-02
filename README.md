@@ -1,18 +1,27 @@
-# microduck-jump — a MicroDuck robot learns to jump, in RL
+# microduck-jump — Niu Lai 🐂 (Here Comes the Cow)
 
 A periodic **hop-in-place** skill for the tiny MicroDuck robot, trained purely
 with PPO in simulation (mjlab, MuJoCo × GPU). No motion capture, no hand-written
 control — only a **reward ladder**: *crouch → launch → airtime*.
+
+The policy is nicknamed **Niu Lai / 牛来** ("Here Comes the Cow") — the duck's
+charging jump stance is a bit *bullish*, and the name double-dips the 2026 meme
+movie. The trained ONNX below is this exact policy; run it anywhere.
 
 **Result (final policy, 256 parallel envs, measured step-by-step):**
 
 | Metric | Value |
 |---|---|
 | Envs with both feet airborne (≥ 5 steps after spawn) | **256 / 256** |
-| Longest air time | **0.21 s** |
-| Root height at apex | **0.187 m** (standing: 0.120 m, +55%) |
+| Longest air time | **0.200 s** |
+| Root height at apex | **0.156 m** (standing: 0.119 m, +31%) |
+| Head swing (peak yaw span) | **105°** vs 153° on v1 — no more head whipping |
 | Posture | upright (0° tilt), continuous crouch–hop cycles |
-| Reward params | 600 iterations, 4096 envs, 50 Hz |
+| Reward params | 600 iters + 2 fine-tunes (neck-stable → postured), 4096 envs, 50 Hz |
+
+Iteration history: **v1** (600 iters) learned the raw jump ladder;
+**v8** added head/neck stability penalties (head-whip 152°→52° mean);
+**v8.6** raised upright/body-axis weights (torso stays composed mid-hop).
 
 <video src="media/jump_closeup.mp4" controls width="640"></video>
 
@@ -52,25 +61,25 @@ Several traps cost real debugging time (all documented in the code comments):
 configs/microduck_jump_env_cfg.py   # env + the reward ladder (heavily commented)
 configs/agent.yaml                  # RL hyper-parameters (PPO, 600 iters)
 configs/env.yaml                    # full serialized env config
-policies/policy.onnx                # exported inference graph (775 KB, metadata embedded)
-policies/model_599.pt               # training checkpoint (4.8 MB, actor+critic)
+policies/niu-lai.onnx               # exported inference graph (775 KB, metadata embedded)
+policies/model_1750.pt              # training checkpoint (4.8 MB, actor+critic)
 scripts/export_policy_to_onnx.py    # re-export + self-check (torch↔onnxrt)
 scripts/verify_jumps.py             # step-by-step jump stress test (256 envs)
-media/jump_closeup.mp4              # close-up render of the final policy
+media/jump_closeup.mp4              # close-up render of the final policy (Niu Lai)
 ```
 
 ## Reproduce
 
 Dependencies: `mjlab==1.3.0`, `rsl-rl`, the `mjlab-microduck` task package
 (entry point `mjlab.tasks → mjlab_microduck`, so tasks register by import),
-CUDA GPU (trained on a Jetson THOR devkit, 4096 envs live).
+CUDA GPU (trained on an NVIDIA THOR devkit, 4096 envs live).
 
 ```bash
 uv run train Mjlab-Jump-Flat-MicroDuck --env.scene.num-envs 4096 --agent.max_iterations 600
 
 # render a video of the final policy (64 envs, world camera):
 MUJOCO_GL=egl RENDER_W=640 RENDER_H=480 uv run python rl-console/render_one.py \
-  Mjlab-Jump-Flat-MicroDuck --ckpt logs/rsl_rl/jump/*_jump-main/model_599.pt \
+  Mjlab-Jump-Flat-MicroDuck --ckpt policies/model_1750.pt \
   --frames 200 --num-envs 64 --extra 30 --origin world --distance 1.3 \
   --elevation -12 --out render.raw
 ```
@@ -78,38 +87,44 @@ MUJOCO_GL=egl RENDER_W=640 RENDER_H=480 uv run python rl-console/render_one.py \
 Verification (the honest one — per-step, physical criterion):
 
 ```bash
-uv run python scripts/verify_jumps.py policies/model_599.pt
-# expect: EVEN-ONCE air>=0.02 (steps>=5): 256/256, MAX air_time ~0.21 s
+uv run python scripts/verify_jumps.py policies/model_1750.pt
+# expect: EVEN-ONCE air>=0.02 (steps>=5): 256/256, MAX air_time ~0.20 s
 ```
 
 ONNX re-export:
 
 ```bash
-uv run python scripts/export_policy_to_onnx.py policies/model_599.pt --out policies/policy.onnx
+uv run python scripts/export_policy_to_onnx.py policies/model_1750.pt --out policies/niu-lai.onnx
 ```
 
 ## ONNX inference
 
-`policy.onnx` — input `obs` float32 `[1, 61]` (concatenated observation terms,
+`niu-lai.onnx` — input `obs` float32 `[1, 61]` (concatenated observation terms,
 order in the model metadata `observation_names`, 50 Hz), output `actions`
 float32 `[1, 14]` (joint targets **relative to home pose**, clip to `[-1, 1]`).
 
 ```python
 import numpy as np, onnxruntime as ort
-sess = ort.InferenceSession("policies/policy.onnx")         # CPU is fine
-obs = np.zeros((1, 61), dtype=np.float32)                   # replace with real obs
-action = sess.run(None, {"obs": obs})[0][0]                 # (14,), home-relative
+sess = ort.InferenceSession("policies/niu-lai.onnx")              # CPU is fine
+obs = np.zeros((1, 61), dtype=np.float32)                    # replace with real obs
+action = sess.run(None, {"obs": obs})[0][0]                  # (14,), home-relative
 ```
 
 Joint order and metadata (names, stiffness/damping, default pose) are embedded
-in the ONNX file — read them with `onnx.load("policy.onnx").metadata_props`.
+in the ONNX file — read them with `onnx.load("niu-lai.onnx").metadata_props`,
+e.g. `run_path = botversex/niu-lai`.
 
 ## 中文说明
 
-MicroDuck(豌豆鸭): 一只超小型四足机器人, 在 mjlab(MuJoCo × GPU)仿真中仅靠
+MicroDuck(豌豆鸭): 一只超小型双足机器人, 在 mjlab(MuJoCo × GPU)仿真中仅靠
 PPO + **阶梯奖励**学会了原地连续弹跳——下蹲(相位 0.10-0.30)→ 蹬地(vz 推力)
-→ 腾空(双足离地)。600 轮、4096 环境并行训练, 最终策略 256/256 环境双足离地,
-最长腾空 0.21s, 重心高度 0.120→0.187m(站立时保持直身不倒)。
+→ 腾空(双足离地)。600 轮 + 两次迭代调优(头颈稳定 v8 → 躯干直立 v8.6)、
+4096 环境并行训练, 最终策略 256/256 环境双足离地, 最长腾空 0.20s,
+重心高度 0.119→0.156m, 站立直身、头部不再乱甩(头部摇摆峰值 105° vs 初版 153°)。
+
+策略代号 **牛来 / Niu Lai (Here Comes the Cow)**——蹬跳前的蓄力冲刺颇有牛味,
+名字也致敬了 2026 年那部反向爆火的年度梗片; 推文/发行名沿用外媒主流译法
+"Here Comes the Cow"。
 
 **为什么难**: 直接奖励"相位窗口内腾空且上升"对从站立开始的策略是概率≈0 事件
 → 梯度为 0 → 策略永远站着。解法是阶梯化: 每一级必须从上一级够得着。
